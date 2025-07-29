@@ -1,45 +1,41 @@
 return {
   "akinsho/toggleterm.nvim",
-  opts = function(_, opts)
+  opts = function()
     local Terminal = require("toggleterm.terminal").Terminal
-    local function make_term(spec)
-      return Terminal:new(vim.tbl_extend("force", {
-        direction = "horizontal",  -- right split, not floating
-        size      = 30,          -- 30 columns
-        hidden    = true,        -- keep it out of :ls
-        close_on_exit = false,   -- keep pane open on crash
-      }, spec))
+    local state = { terms = {} }
+
+    local function project_root()
+      local cwd = vim.fn.getcwd()
+      local markers = { "Justfile", "justfile", ".git", "package.json", "pyproject.toml" }
+      local hit = vim.fs.find(markers, { upward = true, path = cwd })[1]
+      return hit and vim.fs.dirname(hit) or cwd
     end
 
-    local api_term = make_term({
-      name = "API-server",
-      dir  = "~/dev/waiotech/wa-api",
-      cmd  = "source .venv/bin/activate && uvicorn app:app --reload",
-    })
+    local function dev_toggle()
+      local root = project_root()
+      -- Check for a Justfile
+      local jf = vim.fs.find({ "Justfile", "justfile" }, { upward = true, path = root })[1]
+      if not jf then
+        vim.notify("No Justfile found in project root", vim.log.levels.WARN)
+        return
+      end
+      if not state.terms[root] then
+        state.terms[root] = Terminal:new({
+          cmd = "just dev",
+          dir = root,
+          direction = "horizontal", -- right split
+          size = 30,              -- width in columns
+          close_on_exit = false,
+          hidden = true,
+          on_open = function() vim.cmd("wincmd h") end, -- keep focus on code
+        })
+      end
+      state.terms[root]:toggle()
+      vim.cmd("wincmd h")
+    end
 
-    local dash_term = make_term({
-      name = "Dashboard-server",
-      dir  = "~/dev/waiotech/wa-dashboard",
-      cmd  = "npm run dev",
-    })
-
-    vim.api.nvim_create_autocmd("VimEnter", {
-      callback = function()
-        local cwd = vim.fn.getcwd()
-        if cwd:find("/wa%-api") then
-          api_term:toggle()
-          vim.cmd("wincmd h")
-        elseif cwd:find("/wa%-dashboard") then
-          dash_term:toggle()
-          vim.cmd("wincmd h")
-        end
-      end,
-    })
-
-    vim.keymap.set("n", "<leader>sa", function() api_term:toggle()  end,
-      {desc = "Toggle API server"})
-    vim.keymap.set("n", "<leader>sd", function() dash_term:toggle() end,
-      {desc = "Toggle Dashboard server"})
+    vim.api.nvim_create_user_command("ProjectDev", dev_toggle, { desc = "Toggle 'just dev' for current project" })
+    vim.keymap.set("n", "<leader>sd", dev_toggle, { desc = "Dev: just dev" })
   end,
 }
 

@@ -164,7 +164,7 @@ return {
       end
     end)
 
-    LazyVim.lsp.setup()
+    -- LazyVim.lsp.setup()
     LazyVim.lsp.on_dynamic_capability(require("lazyvim.plugins.lsp.keymaps").on_attach)
 
     vim.diagnostic.config(opts.diagnostics)
