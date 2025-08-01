@@ -4,6 +4,7 @@ return {
   dependencies = {
     "williamboman/mason.nvim",
     "williamboman/mason-lspconfig.nvim",
+    "b0o/schemastore.nvim",
   },
   opts = function()
     return {
@@ -15,16 +16,15 @@ return {
       },
 
       inlay_hints = { enabled = true },
+
       capabilities = {
         workspace = {
-          fileOperations = {
-            didRename = true,
-            willRename = true,
-          },
+          fileOperations = { didRename = true, willRename = true },
         },
       },
 
       servers = {
+        -- Lua
         lua_ls = {
           settings = {
             Lua = {
@@ -35,7 +35,7 @@ return {
           },
         },
 
-        -- Enhanced Python configuration
+        -- Python
         pyright = {
           settings = {
             python = {
@@ -53,18 +53,13 @@ return {
             },
           },
         },
-
         ruff = {
-          init_options = { 
-            settings = { 
-              args = {},
-              -- Enable additional ruff features
-              organizeImports = true,
-            } 
+          init_options = {
+            settings = { args = {}, organizeImports = true },
           },
         },
 
-        -- TypeScript/JavaScript support
+        -- TypeScript / JavaScript
         ts_ls = {
           settings = {
             typescript = {
@@ -91,14 +86,54 @@ return {
             },
           },
         },
+        eslint = { settings = { workingDirectories = { mode = "auto" } } },
 
-        -- ESLint for additional JavaScript/TypeScript linting
-        eslint = {
-          settings = {
-            workingDirectories = { mode = "auto" },
+        -- Web stack
+        html = {},
+        cssls = {},
+        emmet_ls = {
+          filetypes = {
+            "html",
+            "css",
+            "scss",
+            "less",
+            "javascriptreact",
+            "typescriptreact",
+            "astro",
+            "svelte",
           },
         },
+        tailwindcss = {
+          filetypes = { "astro", "html", "css", "scss", "less", "javascriptreact", "typescriptreact" },
+          init_options = {
+            userLanguages = { astro = "astro" },
+          },
+        },
+        jsonls = {
+          settings = {
+            json = {
+              schemas = require("schemastore").json.schemas(),
+              validate = { enable = true },
+            },
+          },
+        },
+        yamlls = {
+          settings = {
+            yaml = {
+              schemaStore = { enable = false, url = "" },
+              schemas = require("schemastore").yaml.schemas(),
+              keyOrdering = false,
+            },
+          },
+        },
+        astro = {},
 
+        -- Infra
+        dockerls = {},
+        docker_compose_language_service = {},
+        bashls = {},
+
+        -- Systems & others
         rust_analyzer = {
           settings = {
             ["rust-analyzer"] = {
@@ -107,11 +142,7 @@ return {
             },
           },
         },
-
-        clangd = {
-          cmd = { "clangd", "--offset-encoding=utf-16" },
-        },
-
+        clangd = { cmd = { "clangd", "--offset-encoding=utf-16" } },
         gopls = {
           settings = {
             gopls = {
@@ -120,26 +151,11 @@ return {
             },
           },
         },
-      },
-
-      mason = {
-        ensure_installed = {
-          -- Python
-          "pyright",
-          "ruff",
-          -- TypeScript/JavaScript
-          "typescript-language-server",
-          "eslint-lsp",
-          -- Other languages
-          "rust_analyzer",
-          "clangd",
-          "gopls",
-          "lua-language-server",
-        },
-        automatic_installation = true,
+        marksman = {}, -- markdown
       },
     }
   end,
+
   config = function(_, opts)
     LazyVim.lsp.setup(opts)
     LazyVim.format.register(LazyVim.lsp.formatter())
@@ -147,27 +163,33 @@ return {
     LazyVim.lsp.on_attach(function(client, buffer)
       require("lazyvim.plugins.lsp.keymaps").on_attach(client, buffer)
 
-      -- Python-specific configurations
+      -- Avoid LSP formatting conflicts; formatting handled by conform.nvim
+      local function disable_fmt()
+        client.server_capabilities.documentFormattingProvider = false
+        client.server_capabilities.documentRangeFormattingProvider = false
+      end
+
       if client.name == "ruff" then
         client.server_capabilities.hoverProvider = false
       end
 
-      if client.name == "pyright" then
-        client.server_capabilities.documentFormattingProvider = false
-        client.server_capabilities.documentRangeFormattingProvider = false
-      end
-
-      -- TypeScript-specific configurations
-      if client.name == "ts_ls" then
-        client.server_capabilities.documentFormattingProvider = false
-        client.server_capabilities.documentRangeFormattingProvider = false
+      if
+        client.name == "pyright"
+        or client.name == "ts_ls"
+        or client.name == "eslint"
+        or client.name == "jsonls"
+        or client.name == "yamlls"
+        or client.name == "html"
+        or client.name == "cssls"
+      then
+        disable_fmt()
       end
     end)
 
-    -- LazyVim.lsp.setup()
     LazyVim.lsp.on_dynamic_capability(require("lazyvim.plugins.lsp.keymaps").on_attach)
 
     vim.diagnostic.config(opts.diagnostics)
+
     local servers = opts.servers
     local capabilities = vim.tbl_deep_extend(
       "force",
@@ -177,14 +199,13 @@ return {
     )
 
     local function setup(server)
-      local server_opts = vim.tbl_deep_extend("force", {
-        capabilities = vim.deepcopy(capabilities),
-      }, servers[server] or {})
+      local server_opts =
+        vim.tbl_deep_extend("force", { capabilities = vim.deepcopy(capabilities) }, servers[server] or {})
       require("lspconfig")[server].setup(server_opts)
     end
 
-    local has_mason, mlsp = pcall(require, "mason-lspconfig")
-    if has_mason then
+    local ok, mlsp = pcall(require, "mason-lspconfig")
+    if ok then
       mlsp.setup({
         ensure_installed = vim.tbl_keys(servers),
         handlers = { setup },

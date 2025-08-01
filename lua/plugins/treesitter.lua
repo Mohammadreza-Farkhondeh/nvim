@@ -1,6 +1,10 @@
 return {
   "nvim-treesitter/nvim-treesitter",
   build = ":TSUpdate",
+  dependencies = {
+    "windwp/nvim-ts-autotag",
+    "JoosepAlviste/nvim-ts-context-commentstring",
+  },
   opts = {
     ensure_installed = {
       "python",
@@ -21,6 +25,12 @@ return {
       "markdown_inline",
       "regex",
       "dockerfile",
+      "astro",
+      "toml",
+      "vim",
+      "vimdoc",
+      "gitignore",
+      "query",
     },
     highlight = { enable = true },
     incremental_selection = { enable = true },
